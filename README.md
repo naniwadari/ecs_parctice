@@ -3,11 +3,11 @@
 ## スタートガイド
 
 ### CDK利用の下準備
-複数のアカウントをAWS CLIに設定している場合は使用するアカウントを指定
+複数のプロファイルをAWS CLIに設定している場合は使用するアカウントを指定
 ```
-export AWS_PROFILE={環境名}
+export AWS_PROFILE={プロファイル名}
 ```
-CDKを実行するための下準備を実行
+CDKを実行するための下準備を実行(アカウントのCFnにCDKToolkitスタックがあれば実行済み)
 ```
 cdk bootstrap
 ```
