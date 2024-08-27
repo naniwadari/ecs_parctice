@@ -1,4 +1,5 @@
 # ecs_parctice
+LaravelをECSで稼働させるテスト
 
 ## スタートガイド
 ### 関連ライブラリのインストール
@@ -24,7 +25,7 @@ cdk bootstrap
 cdk deploy
 ```
 
-###　参考
+### 参考
 ECSとECRのコンテナ構成をCDKで実装してみた
 https://dev.classmethod.jp/articles/cdk-ecs-ecr/
 
