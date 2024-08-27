@@ -5,7 +5,7 @@ import { EcsStack } from "../stack/ecs_stack"
 import { config } from "../stack/config/test"
 
 const app = new Cdk.App()
-new EcsStack(app, "EcsStack", {
+new EcsStack(app, config.stackName, {
   env: {
     account: config.account,
     region: config.region,

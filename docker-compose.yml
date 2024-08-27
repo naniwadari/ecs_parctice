@@ -1,0 +1,19 @@
+version: '3'
+services:
+  app:
+    build:
+      context: .
+      dockerfile: ./docker/php/Dockerfile
+    container_name: app_laravel
+    volumes:
+      - ./app:/var/www/app
+  nginx:
+    build:
+      context: .
+      dockerfile: ./docker/nginx/Dockerfile
+    container_name: nginx_laravel
+    ports:
+      - 8000:80
+    working_dir: /var/www
+    depends_on:
+      - app

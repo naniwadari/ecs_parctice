@@ -9,30 +9,55 @@ import { Construct } from "constructs"
 import { config } from "./config/test"
 import { DockerImageAsset, Platform } from "aws-cdk-lib/aws-ecr-assets"
 import * as path from "path"
+import { ApplicationProtocol } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 
 export class EcsStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
+    
     super(scope, id, props)
 
     const { accountId, region } = new ScopedAws(this)
 
     const resourceName = config.resourceName
 
-    const ecrRepository = new Ecr.Repository(this, "EcrRepo", {
-      repositoryName: `${resourceName}-ecr-repo`,
+    // Nginx用リポジトリ
+    const ecrRepositoryNginx = new Ecr.Repository(this, "EcrRepoNginx", {
+      repositoryName: `${resourceName}-ecr-repo-nginx`,
       removalPolicy: config.ecrRepository.removalPolicy,
       emptyOnDelete: config.ecrRepository.autoDeleteImage,
     })
 
-    const dockerImageAsset = new DockerImageAsset(this, "DockerImageAsset", {
-      directory: path.join(__dirname, "..", "app"),
+    const dockerImageAssetNginx = new DockerImageAsset(this, "DockerImageAssetNginx", {
+      // Dockerfileは親ディレクトリ参照できないのでdirecotryとfileを別で定義
+      directory: '.',
+      file: "docker/nginx/Dockerfile",
       platform: Platform.LINUX_AMD64,
     })
 
-    new EcrDeploy.ECRDeployment(this, "DeployDockerImage", {
-      src: new EcrDeploy.DockerImageName(dockerImageAsset.imageUri),
+    new EcrDeploy.ECRDeployment(this, "DeployDockerImageNginx", {
+      src: new EcrDeploy.DockerImageName(dockerImageAssetNginx.imageUri),
       dest: new EcrDeploy.DockerImageName(
-        `${accountId}.dkr.ecr.${region}.amazonaws.com/${ecrRepository.repositoryName}:latest`
+        `${accountId}.dkr.ecr.${region}.amazonaws.com/${ecrRepositoryNginx.repositoryName}:latest`
+      )
+    })
+
+    // PHP用リポジトリ
+    const ecrRepositoryPhp = new Ecr.Repository(this, "EcrRepoPhp", {
+      repositoryName: `${resourceName}-ecr-repo-php`,
+      removalPolicy: config.ecrRepository.removalPolicy,
+      emptyOnDelete: config.ecrRepository.autoDeleteImage,
+    })
+  
+    const dockerImageAssetPhp = new DockerImageAsset(this, "DockerImageAssetPhp", {
+      directory: '.',
+      file: path.join("docker/php/Dockerfile"),
+      platform: Platform.LINUX_AMD64,
+    })
+
+    new EcrDeploy.ECRDeployment(this, "DeployDockerImagePhp", {
+      src: new EcrDeploy.DockerImageName(dockerImageAssetPhp.imageUri),
+      dest: new EcrDeploy.DockerImageName(
+        `${accountId}.dkr.ecr.${region}.amazonaws.com/${ecrRepositoryPhp.repositoryName}:latest`
       )
     })
 
@@ -59,6 +84,51 @@ export class EcsStack extends Stack {
       removalPolicy: config.logGroup.removalPolicy,
     })
 
+    /**
+     * タスクとコンテナのポートとログを定義
+     */
+    const taskDefinition = new Ecs.FargateTaskDefinition(this, "TaskDefinition", {
+      family: `${resourceName}-taskdef`
+    })
+
+    const nginxContainer = taskDefinition.addContainer('nginx', {
+      image: Ecs.ContainerImage.fromEcrRepository(ecrRepositoryNginx, "latest"),
+      portMappings: [
+        {
+          hostPort: 80,
+          containerPort: 80,
+        }
+      ],
+      logging: new Ecs.AwsLogDriver({
+        streamPrefix: `nginx`,
+        logGroup: logGroup,
+      }),
+    })
+
+    const appContainer = taskDefinition.addContainer('app', {
+      image: Ecs.ContainerImage.fromEcrRepository(ecrRepositoryPhp, "latest"),
+      portMappings: [
+        {
+          hostPort: 9000,
+          containerPort: 9000,
+        }
+      ],
+      logging: new Ecs.AwsLogDriver({
+        streamPrefix: `app`,
+        logGroup: logGroup,
+      }),
+    })
+
+    // コンテナの依存関係を定義
+    nginxContainer.addContainerDependencies({
+      container: appContainer,
+      condition: Ecs.ContainerDependencyCondition.START
+    })
+
+    /**
+     * TODO: ALBのターゲットポートが最初に定義したコンテナのポートになってしまうので設定方法調べる
+     * 今はNginxを最初に定義することでなんとかしている
+     */
     const service = new EcsPatterns.ApplicationLoadBalancedFargateService(
       this,
       "FargateService",
@@ -72,15 +142,8 @@ export class EcsStack extends Stack {
         memoryLimitMiB: 512,
         assignPublicIp: true,
         taskSubnets: { subnetType: Ec2.SubnetType.PUBLIC },
-        taskImageOptions: {
-          family: `${resourceName}-taskdef`,
-          containerName: `${resourceName}-container`,
-          image: Ecs.ContainerImage.fromEcrRepository(ecrRepository, "latest"),
-          logDriver: new Ecs.AwsLogDriver({
-            streamPrefix: `container`,
-            logGroup: logGroup,
-          })
-        },
+        targetProtocol: ApplicationProtocol.HTTP,
+        taskDefinition: taskDefinition,
       }
     )
   }
