@@ -1,0 +1,6 @@
+/node_modules
+
+/cdk.out/
+/stack/config/*
+!/stack/config/example.ts
+cdk.context.json
