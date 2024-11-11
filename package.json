@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "cdk:deploy:dev": "export CDK_ENV=develop && cdk deploy",
+    "cdk:deploy:dev:with-ecr": "export CDK_ENV=develop && export WITH_ECR=true && cdk deploy"
+  },
   "dependencies": {
     "aws-cdk": "^2.154.1",
     "aws-cdk-lib": "^2.154.1",
