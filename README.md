@@ -18,12 +18,33 @@ cdk bootstrap
 ```
 
 ### 環境変数設定
-- `stack/config/example.ts`をコピーして必要な値を設定
+- `stack/config/example.ts`をコピーして`develop.ts`を作成し、必要な値を設定
+
 
 ### デプロイ
 ```
-cdk deploy
+// CFnのみ実行
+npm run cdk:deploy:dev
+//コンテナもデプロイ
+npm run cdk:deploy:dev:with-ecr
 ```
+
+※dev以外は自分で`package.json`にスクリプト設定。
+
+### マイグレーションとシード実行
+実行用のコンテナを作成していないのでAWSコンソールから実行
+AWSコンソール>ECS>該当クラスター>タスク>新しいタスクの実行
+以下の項目を適宜設定
+- デプロイ設定
+  - ファミリー
+- ネットワーキング
+  - VPC
+  - サブネット
+  - セキュリティグループ
+- コンテナの上書き
+  - コマンドの上書き: 実行するコマンドを","区切りで記載
+    - マイグレーション: `php,artisan,migrate`
+    - シード実行: `php,artisan,db:seed`
 
 ### 参考
 ECSとECRのコンテナ構成をCDKで実装してみた
@@ -34,3 +55,6 @@ https://chariosan.com/2021/10/24/cdk_ecr_deployment_docker_push/
 
 Docker上で動くLaravel(PHP)をAWS ECS-Fargateにデプロイする(codecommit/codepipeline/codebuild/codedeploy)
 https://it.kensan.net/docker%E4%B8%8A%E3%81%A7%E5%8B%95%E3%81%8Flaravelphp%E3%82%92aws-ecs%E3%81%AB%E3%83%87%E3%83%97%E3%83%AD%E3%82%A4%E3%81%99%E3%82%8B.html
+
+AWS CDKでECS/FargateとRDSを作成
+https://zenn.dev/akira_abe/articles/20220220-aws-cdk-fargate

@@ -4,3 +4,7 @@
 /stack/config/*
 !/stack/config/example.ts
 cdk.context.json
+.aws-config
+.aws-credentials
+
+docker/mysql/data/*
