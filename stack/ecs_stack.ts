@@ -11,13 +11,15 @@ import { DockerImageAsset, Platform } from "aws-cdk-lib/aws-ecr-assets"
 import * as path from "path"
 import { ApplicationProtocol } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 import { Certificate } from "aws-cdk-lib/aws-certificatemanager"
+import { AuroraMysqlEngineVersion, ClusterInstance, DatabaseCluster, DatabaseClusterEngine } from "aws-cdk-lib/aws-rds"
+import { Policy, PolicyStatement, Role } from "aws-cdk-lib/aws-iam"
+import { Config } from "../stack/config/config";
 
 export class EcsStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     const env = process.env.CDK_ENV
     const withEcr = process.env.WITH_ECR === "true"
-    const config = require("./config/"+env).config
-    console.log(config)
+    const config: Config = require("./config/"+env).config
     super(scope, id, props)
     const { accountId, region } = new ScopedAws(this)
     const resourceName = config.resourceName
@@ -66,6 +68,9 @@ export class EcsStack extends Stack {
       })
     }
 
+    /**
+     * VPC
+     */
     const vpc = new Ec2.Vpc(this, "Vpc", {
       vpcName: `${resourceName}-vpc`,
       maxAzs: 2,
@@ -76,9 +81,55 @@ export class EcsStack extends Stack {
           name: `${resourceName}-public`,
           subnetType: Ec2.SubnetType.PUBLIC,
         },
+        {
+          cidrMask: 28,
+          name: `${resourceName}-private`,
+          subnetType: Ec2.SubnetType.PRIVATE_ISOLATED,
+        }
       ],
     })
 
+    /**
+     * セキュリティグループ
+     * 自動作成されるが、他リソースから参照できなくなってしまうため手動で作成
+     */
+    const ecsSG = new Ec2.SecurityGroup(this, "ECSSecurityGroup", {
+      vpc,
+    })
+    const rdsSG = new Ec2.SecurityGroup(this, "RDSSecurityGroup", {
+      vpc,
+      allowAllOutbound: true,
+    })
+    // ECS => RDSへのポート許可
+    rdsSG.connections.allowFrom(ecsSG, Ec2.Port.tcp(3306), "Ingress 3306 from ECS")
+  
+    /**
+     * RDS
+     */
+    const rdsCluster = new DatabaseCluster(this, "RDS", {
+      engine: DatabaseClusterEngine.auroraMysql({
+        version: AuroraMysqlEngineVersion.VER_3_07_1,
+      }),
+      clusterIdentifier: `${resourceName}-rds-cluster`,
+      vpc: vpc,
+      vpcSubnets: {
+        subnetType: Ec2.SubnetType.PRIVATE_ISOLATED,
+      },
+      securityGroups: [rdsSG],
+      writer: ClusterInstance.provisioned('writer', {
+        instanceType: Ec2.InstanceType.of(
+          config.rds.instanceClass,
+          config.rds.instanceSize,
+        ),
+      }),
+      defaultDatabaseName: config.rds.defaultDatabaseName,
+      removalPolicy: config.rds.removalPolicy,
+    })
+    const secretsManager = rdsCluster.secret!
+
+    /**
+     * ECSクラスター
+     */
     const cluster = new Ecs.Cluster(this, "EcsCluster", {
       clusterName: `${resourceName}-cluster`,
       vpc: vpc,
@@ -90,10 +141,10 @@ export class EcsStack extends Stack {
     })
 
     /**
-     * タスクとコンテナのポートとログを定義
+     * タスク定義
      */
     const taskDefinition = new Ecs.FargateTaskDefinition(this, "TaskDefinition", {
-      family: `${resourceName}-taskdef`
+      family: `${resourceName}-taskdef`,
     })
 
     const nginxContainer = taskDefinition.addContainer('nginx', {
@@ -122,6 +173,12 @@ export class EcsStack extends Stack {
         streamPrefix: `app`,
         logGroup: logGroup,
       }),
+      secrets: {
+        "DB_DATABASE": Ecs.Secret.fromSecretsManager(secretsManager, 'dbname'),
+        "DB_USERNAME": Ecs.Secret.fromSecretsManager(secretsManager, 'username'),
+        "DB_HOST": Ecs.Secret.fromSecretsManager(secretsManager, 'host'),
+        "DB_PASSWORD": Ecs.Secret.fromSecretsManager(secretsManager, 'password'),
+      }
     })
 
     // コンテナの依存関係を定義
@@ -131,17 +188,17 @@ export class EcsStack extends Stack {
     })
 
     // 証明書の取得
-    const certificate = Certificate.fromCertificateArn(this, "Certificate", config.certificateArn)
+    const certificate = Certificate.fromCertificateArn(this, "Certificate", config.elb.certificateArn)
     // ホストゾーンの取得
     const hostedZone = Route53.HostedZone.fromHostedZoneAttributes(
       this,
       "HostedZoneId",
       {
-        hostedZoneId: config.route53HostedZoneID,
-        zoneName: config.route53HostedZoneName,
+        hostedZoneId: config.route53.hostedZoneId,
+        zoneName: config.route53.hostedZoneName,
       },
     )
-        
+
     /**
      * ECSパターンズのテンプレートを利用したELB+Fargateの構築
      * @see https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ecs_patterns.ApplicationLoadBalancedFargateService.html
@@ -155,7 +212,7 @@ export class EcsStack extends Stack {
         cluster: cluster,
         serviceName: `${resourceName}-service`,
         cpu: 256,
-        desiredCount: 2,
+        desiredCount: 1,
         memoryLimitMiB: 512,
         assignPublicIp: true,
         taskSubnets: { subnetType: Ec2.SubnetType.PUBLIC },
@@ -164,10 +221,37 @@ export class EcsStack extends Stack {
         // ELB=>コンテナのプロトコル
         targetProtocol: ApplicationProtocol.HTTP,
         taskDefinition: taskDefinition,
-        domainName: config.route53SubDomainName,
+        domainName: config.route53.subDomainName,
         domainZone: hostedZone,
         certificate: certificate,
+        // タスクの無限再起動防止
+        circuitBreaker: {
+          enable: true,
+          rollback: true,
+        },
+        securityGroups: [ecsSG],
+        healthCheck: {
+          command: ["CMD-SHELL", `curl -f https://${config.route53.subDomainName}.${config.route53.hostedZoneName}/ping || exit 1`],
+        }
       }
     )
+    /**
+     * SecretManager許可設定
+     */
+    const ecsExecutionRole = Role.fromRoleArn(
+      this,
+      "ECSExecutionRole",
+      service.taskDefinition.executionRole!.roleArn,
+      {},
+    )
+    // ECSのロールにSecretsManagerの読み取り許可
+    ecsExecutionRole.attachInlinePolicy(new Policy(this, 'SecretsManagerGetPolicy', {
+      statements: [
+        new PolicyStatement({
+          actions: ['secretsmanager:GetSecretValue'],
+          resources: [secretsManager.secretArn],
+        }),
+      ]
+    }))
   }
 }
