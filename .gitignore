@@ -3,6 +3,7 @@
 /cdk.out/
 /stack/config/*
 !/stack/config/example.ts
+!/stack/config/config.d.ts
 cdk.context.json
 .aws-config
 .aws-credentials
