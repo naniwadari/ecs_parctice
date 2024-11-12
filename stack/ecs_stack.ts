@@ -13,13 +13,13 @@ import { ApplicationProtocol } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 import { Certificate } from "aws-cdk-lib/aws-certificatemanager"
 import { AuroraMysqlEngineVersion, ClusterInstance, DatabaseCluster, DatabaseClusterEngine } from "aws-cdk-lib/aws-rds"
 import { Policy, PolicyStatement, Role } from "aws-cdk-lib/aws-iam"
+import { Config } from "../stack/config/config";
 
 export class EcsStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     const env = process.env.CDK_ENV
     const withEcr = process.env.WITH_ECR === "true"
-    const config = require("./config/"+env).config
-    console.log(config)
+    const config: Config = require("./config/"+env).config
     super(scope, id, props)
     const { accountId, region } = new ScopedAws(this)
     const resourceName = config.resourceName
@@ -122,7 +122,7 @@ export class EcsStack extends Stack {
           config.rds.instanceSize,
         ),
       }),
-      defaultDatabaseName: config.defaultDatabaseName,
+      defaultDatabaseName: config.rds.defaultDatabaseName,
       removalPolicy: config.rds.removalPolicy,
     })
     const secretsManager = rdsCluster.secret!
@@ -144,7 +144,7 @@ export class EcsStack extends Stack {
      * タスク定義
      */
     const taskDefinition = new Ecs.FargateTaskDefinition(this, "TaskDefinition", {
-      family: `${resourceName}-taskdef`
+      family: `${resourceName}-taskdef`,
     })
 
     const nginxContainer = taskDefinition.addContainer('nginx', {
@@ -188,14 +188,14 @@ export class EcsStack extends Stack {
     })
 
     // 証明書の取得
-    const certificate = Certificate.fromCertificateArn(this, "Certificate", config.certificateArn)
+    const certificate = Certificate.fromCertificateArn(this, "Certificate", config.elb.certificateArn)
     // ホストゾーンの取得
     const hostedZone = Route53.HostedZone.fromHostedZoneAttributes(
       this,
       "HostedZoneId",
       {
-        hostedZoneId: config.route53HostedZoneID,
-        zoneName: config.route53HostedZoneName,
+        hostedZoneId: config.route53.hostedZoneId,
+        zoneName: config.route53.hostedZoneName,
       },
     )
 
@@ -221,7 +221,7 @@ export class EcsStack extends Stack {
         // ELB=>コンテナのプロトコル
         targetProtocol: ApplicationProtocol.HTTP,
         taskDefinition: taskDefinition,
-        domainName: config.route53SubDomainName,
+        domainName: config.route53.subDomainName,
         domainZone: hostedZone,
         certificate: certificate,
         // タスクの無限再起動防止
@@ -230,6 +230,9 @@ export class EcsStack extends Stack {
           rollback: true,
         },
         securityGroups: [ecsSG],
+        healthCheck: {
+          command: ["CMD-SHELL", `curl -f https://${config.route53.subDomainName}.${config.route53.hostedZoneName}/ping || exit 1`],
+        }
       }
     )
     /**

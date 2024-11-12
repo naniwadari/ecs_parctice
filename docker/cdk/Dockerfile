@@ -16,13 +16,6 @@ $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev
 RUN sudo apt-get update
 RUN sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
-# ulimitエラー対策(https://github.com/docker/cli/issues/4807)
-RUN \
-    echo "ulimits: $(ulimit -Sn):$(ulimit -Hn)"; \
-    sed -i 's/ulimit -Hn/# ulimit -Hn/g' /etc/init.d/docker; \
-    service docker start; \
-    rm -rf /var/cache/apt;
-
 # aws-cliのインストール(https://docs.aws.amazon.com/ja_jp/cli/latest/userguide/getting-started-install.html)
 WORKDIR /usr/local
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"

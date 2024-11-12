@@ -1,5 +1,7 @@
 # ecs_practice
-LaravelをECSで稼働させるテスト
+AWS CDKを利用して、以下の環境を構築する
+- Laravel11
+- Fargate + ECS
 
 ## スタートガイド
 ### AWS認証情報設定
