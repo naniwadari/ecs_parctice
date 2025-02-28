@@ -11,7 +11,7 @@ import { DockerImageAsset, Platform } from "aws-cdk-lib/aws-ecr-assets"
 import * as path from "path"
 import { ApplicationProtocol } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 import { Certificate } from "aws-cdk-lib/aws-certificatemanager"
-import { AuroraMysqlEngineVersion, ClusterInstance, DatabaseCluster, DatabaseClusterEngine } from "aws-cdk-lib/aws-rds"
+import { AuroraMysqlEngineVersion, ClusterInstance, DatabaseCluster, DatabaseClusterEngine, IClusterInstance } from "aws-cdk-lib/aws-rds"
 import { Policy, PolicyStatement, Role } from "aws-cdk-lib/aws-iam"
 import { Config } from "../stack/config/config";
 
@@ -106,6 +106,18 @@ export class EcsStack extends Stack {
     /**
      * RDS
      */
+    let readers: IClusterInstance[] = [];
+    if (config.rds.hasReader) {
+      readers = [
+        ClusterInstance.provisioned('reader1', {
+          promotionTier: 1,
+          instanceType: Ec2.InstanceType.of(
+            config.rds.instanceClass,
+            config.rds.instanceSize,
+          )
+        })
+      ]
+    }
     const rdsCluster = new DatabaseCluster(this, "RDS", {
       engine: DatabaseClusterEngine.auroraMysql({
         version: AuroraMysqlEngineVersion.VER_3_07_1,
@@ -122,6 +134,7 @@ export class EcsStack extends Stack {
           config.rds.instanceSize,
         ),
       }),
+      readers: readers,
       defaultDatabaseName: config.rds.defaultDatabaseName,
       removalPolicy: config.rds.removalPolicy,
     })

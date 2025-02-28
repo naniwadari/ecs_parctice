@@ -28,5 +28,7 @@ interface Config {
     mysqlVersion: AuroraMysqlEngineVersion,
     instanceClass: Ec2.InstanceClass,
     instanceSize: Ec2.InstanceSize,
+    // 冗長構成にするか？
+    hasReader: boolean,
   }
 }
