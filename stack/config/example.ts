@@ -36,5 +36,7 @@ export const config: Config = {
     mysqlVersion: AuroraMysqlEngineVersion.VER_3_07_1,
     instanceClass: Ec2.InstanceClass.BURSTABLE3,
     instanceSize: Ec2.InstanceSize.MEDIUM,
+    // 冗長構成にするか？
+    hasReader: false,
   }
 }
