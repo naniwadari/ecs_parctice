@@ -7,6 +7,7 @@ services:
     container_name: app
     volumes:
       - ./app:/var/www/app
+      - ./.env:/var/www/app/.env
     environment:
       - DB_HOST=mysql8
       - DB_PORT=3306

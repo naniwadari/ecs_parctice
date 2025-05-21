@@ -3,6 +3,7 @@ import { AuroraMysqlEngineVersion } from "aws-cdk-lib/aws-rds"
 import * as Ec2 from "aws-cdk-lib/aws-ec2"
 
 interface Config {
+  env: string,
   account: string,
   region: string,
   resourceName: string,
@@ -30,5 +31,20 @@ interface Config {
     instanceSize: Ec2.InstanceSize,
     // 冗長構成にするか？
     hasReader: boolean,
+  },
+  environment: {
+    APP_NAME: string,
+    APP_KEY: string,
+    APP_DEBUG: string,
+    APP_TIMEZONE: string,
+    APP_URL: string,
+    APP_LOCALE: string,
+    APP_FALLBACK_LOCALE: string,
+    APP_MAINTENANCE_DRIVER: string,
+    LOG_CHANNEL: string,
+    LOG_STACK: string,
+    LOG_DEPRECATIONS_CHANNEL: string,
+    LOG_LEVEL: string,
+    DB_CONNECTION: string,
   }
 }

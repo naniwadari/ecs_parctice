@@ -9,3 +9,5 @@ cdk.context.json
 .aws-credentials
 
 docker/mysql/data/*
+
+/.env

@@ -9,3 +9,7 @@ Route::get('/', function () {
 Route::get('/ping', function () {
     return response("pong", 200);
 });
+
+Route::get('/app_env', function () {
+    return response(env('APP_ENV'));
+});
