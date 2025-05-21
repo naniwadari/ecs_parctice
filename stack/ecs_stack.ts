@@ -6,6 +6,8 @@ import * as Ecs from "aws-cdk-lib/aws-ecs"
 import * as Logs from "aws-cdk-lib/aws-logs"
 import * as EcsPatterns from "aws-cdk-lib/aws-ecs-patterns"
 import * as Route53 from "aws-cdk-lib/aws-route53"
+import * as SecretsManager from "aws-cdk-lib/aws-secretsmanager"
+import { SecretValue } from "aws-cdk-lib"
 import { Construct } from "constructs"
 import { DockerImageAsset, Platform } from "aws-cdk-lib/aws-ecr-assets"
 import * as path from "path"
@@ -138,7 +140,7 @@ export class EcsStack extends Stack {
       defaultDatabaseName: config.rds.defaultDatabaseName,
       removalPolicy: config.rds.removalPolicy,
     })
-    const secretsManager = rdsCluster.secret!
+    const rdsSecretsManager = rdsCluster.secret!
 
     /**
      * ECSクラスター
@@ -151,6 +153,28 @@ export class EcsStack extends Stack {
     const logGroup = new Logs.LogGroup(this, "LogGroup", {
       logGroupName: `/aws/ecs/${resourceName}`,
       removalPolicy: config.logGroup.removalPolicy,
+    })
+
+    /**
+     * Secrets Manager
+     */
+    const secretsManager = new SecretsManager.Secret(this, "SecretsManager", {
+      secretObjectValue: {
+        app_env: SecretValue.unsafePlainText(config.env),
+        app_name: SecretValue.unsafePlainText(config.environment.APP_NAME),
+        app_key: SecretValue.unsafePlainText(config.environment.APP_KEY),
+        app_debug: SecretValue.unsafePlainText(config.environment.APP_DEBUG),
+        app_timezone: SecretValue.unsafePlainText(config.environment.APP_TIMEZONE),
+        app_url: SecretValue.unsafePlainText(config.environment.APP_URL),
+        app_locale: SecretValue.unsafePlainText(config.environment.APP_LOCALE),
+        app_fallback_locale: SecretValue.unsafePlainText(config.environment.APP_FALLBACK_LOCALE),
+        app_maintenance_driver: SecretValue.unsafePlainText(config.environment.APP_MAINTENANCE_DRIVER),
+        log_channel: SecretValue.unsafePlainText(config.environment.LOG_CHANNEL),
+        log_stack: SecretValue.unsafePlainText(config.environment.LOG_STACK),
+        log_deprecations_channel: SecretValue.unsafePlainText(config.environment.LOG_DEPRECATIONS_CHANNEL),
+        log_level: SecretValue.unsafePlainText(config.environment.LOG_LEVEL),
+        db_connection: SecretValue.unsafePlainText(config.environment.DB_CONNECTION),
+      }
     })
 
     /**
@@ -187,10 +211,24 @@ export class EcsStack extends Stack {
         logGroup: logGroup,
       }),
       secrets: {
-        "DB_DATABASE": Ecs.Secret.fromSecretsManager(secretsManager, 'dbname'),
-        "DB_USERNAME": Ecs.Secret.fromSecretsManager(secretsManager, 'username'),
-        "DB_HOST": Ecs.Secret.fromSecretsManager(secretsManager, 'host'),
-        "DB_PASSWORD": Ecs.Secret.fromSecretsManager(secretsManager, 'password'),
+        "DB_DATABASE": Ecs.Secret.fromSecretsManager(rdsSecretsManager, 'dbname'),
+        "DB_USERNAME": Ecs.Secret.fromSecretsManager(rdsSecretsManager, 'username'),
+        "DB_HOST": Ecs.Secret.fromSecretsManager(rdsSecretsManager, 'host'),
+        "DB_PASSWORD": Ecs.Secret.fromSecretsManager(rdsSecretsManager, 'password'),
+        "APP_ENV": Ecs.Secret.fromSecretsManager(secretsManager, 'app_env'),
+        "APP_NAME": Ecs.Secret.fromSecretsManager(secretsManager, 'app_name'),
+        "APP_KEY": Ecs.Secret.fromSecretsManager(secretsManager, 'app_key'),
+        "APP_DEBUG": Ecs.Secret.fromSecretsManager(secretsManager, 'app_debug'),
+        "APP_TIMEZONE": Ecs.Secret.fromSecretsManager(secretsManager, 'app_timezone'),
+        "APP_URL": Ecs.Secret.fromSecretsManager(secretsManager, 'app_url'),
+        "APP_LOCALE": Ecs.Secret.fromSecretsManager(secretsManager, 'app_locale'),
+        "APP_FALLBACK_LOCALE": Ecs.Secret.fromSecretsManager(secretsManager, 'app_fallback_locale'),
+        "APP_MAINTENANCE_DRIVER": Ecs.Secret.fromSecretsManager(secretsManager, 'app_maintenance_driver'),
+        "LOG_CHANNEL": Ecs.Secret.fromSecretsManager(secretsManager, 'log_channel'),
+        "LOG_STACK": Ecs.Secret.fromSecretsManager(secretsManager, 'log_stack'),
+        "LOG_DEPRECATIONS_CHANNEL": Ecs.Secret.fromSecretsManager(secretsManager, 'log_deprecations_channel'),
+        "LOG_LEVEL": Ecs.Secret.fromSecretsManager(secretsManager, 'log_level'),
+        "DB_CONNECTION": Ecs.Secret.fromSecretsManager(secretsManager, 'db_connection'),
       }
     })
 
@@ -262,7 +300,10 @@ export class EcsStack extends Stack {
       statements: [
         new PolicyStatement({
           actions: ['secretsmanager:GetSecretValue'],
-          resources: [secretsManager.secretArn],
+          resources: [
+            rdsSecretsManager.secretArn,
+            secretsManager.secretArn,
+          ],
         }),
       ]
     }))

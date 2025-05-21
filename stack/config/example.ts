@@ -4,6 +4,7 @@ import { AuroraMysqlEngineVersion } from "aws-cdk-lib/aws-rds"
 import { Config } from "./config";
 
 export const config: Config = {
+  env: "example",
   account: "",
   region: "",
   resourceName: "",
@@ -38,5 +39,20 @@ export const config: Config = {
     instanceSize: Ec2.InstanceSize.MEDIUM,
     // 冗長構成にするか？
     hasReader: false,
+  },
+  // デプロイ時の環境変数
+  environment: {
+    APP_NAME: "",
+    APP_KEY: "",
+    APP_DEBUG: "",
+    APP_TIMEZONE: "",
+    APP_URL: "",
+    APP_LOCALE: "",
+    APP_FALLBACK_LOCALE: "",
+    LOG_CHANNEL:"",
+    LOG_STACK:"",
+    LOG_DEPRECATIONS_CHANNEL:"",
+    LOG_LEVEL:"",
+    DB_CONNECTION: "",
   }
 }
